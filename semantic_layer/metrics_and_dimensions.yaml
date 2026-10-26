@@ -1,0 +1,87 @@
+version: 2.1
+name: luca_clinical_deep_twin_semantic_layer
+description: Semantic layer definitions for Spine Surgery & Mechanism-based Pain Deep Twin (Director Choi Sun Jong)
+
+dimensions:
+  clinical:
+    - name: pain_vas_rest
+      type: integer
+      range: [0, 10]
+      description: Resting visual analog scale
+    - name: pain_vas_motion
+      type: integer
+      range: [0, 10]
+      description: Dynamic/walking visual analog scale
+    - name: radiculopathy_ratio
+      type: float
+      range: [0.0, 1.0]
+      description: Ratio of radiating pain over axial lower back pain
+    - name: claudication_distance_m
+      type: integer
+      unit: meters
+      description: Pain-free continuous walking distance
+    - name: smc_motor_grade
+      type: integer
+      range: [0, 5]
+      description: Medical Research Council motor scale (L4 dorsiflexion, L5 EHL, S1 plantarflexion)
+    - name: dermatome_concordance
+      type: boolean
+      description: True if patient sensory deficit exactly matches the nerve root level on MRI
+
+  chronobiology:
+    - name: circadian_pain_peak_hour
+      type: integer
+      range: [0, 23]
+      standard_peak: 3.5  # 03:00 - 04:00 AM
+      description: Time of maximal pain sensitivity and cytokine surge
+    - name: morning_stiffness_minutes
+      type: integer
+      description: Duration of morning stiffness in facet or inflammatory joint pain
+
+  psychological:
+    - name: pain_catastrophizing_scale
+      type: integer
+      range: [0, 52]
+      description: PCS score measuring magnification, rumination, helplessness
+    - name: fear_avoidance_score
+      type: integer
+      range: [0, 66]
+      description: FABQ score representing threat prior in Bayesian pain matrix
+
+metrics:
+  bayesian_threat_prior:
+    formula: "(pain_catastrophizing_scale / 52.0) * 0.5 + (fear_avoidance_score / 66.0) * 0.5"
+    type: float
+    description: Prior threat expectation modulating pain output
+
+  surgical_necessity_score:
+    formula: "0.4 * (5 - smc_motor_grade) + 0.3 * (pain_vas_motion / 10.0) + 0.2 * stenosis_grade + 0.1 * instability_index"
+    type: float
+    range: [0.0, 1.0]
+    thresholds:
+      conservative: "< 0.45"
+      interventional_pen: "0.45 - 0.74"
+      endoscopic_surgery_bess: ">= 0.75"
+
+decision_rules:
+  surgical_gate:
+    positive_indications:
+      - condition: "cauda_equina_syndrome == True"
+        action: "emergency_decompression_within_24h"
+      - condition: "smc_motor_grade <= 3"
+        action: "early_endoscopic_bess_decompression"
+      - condition: "conservative_treatment_weeks >= 6 and surgical_necessity_score >= 0.75"
+        action: "elective_bess_or_microdiscectomy"
+    negative_filters:
+      - condition: "smc_motor_grade == 5 and disc_herniation_acute == True"
+        action: "strictly_reject_fusion_and_encourage_macrophage_resorption"
+      - condition: "segmental_instability == False"
+        action: "reject_instrumented_fusion_and_prefer_bess_decompression"
+
+  chronopharmacology_schedule:
+    duloxetine:
+      timing: "20:00 - 21:00 (Evening post-meal)"
+      rationale: "Aligns Tmax (6 hours post-dose) with the 03:00-04:00 AM circadian pain hypersensitivity peak"
+    pregabalin:
+      timing: "Bedtime (22:00)"
+      rationale: "Suppresses nocturnal paroxysmal neuropathic firing and restores slow-wave sleep"
